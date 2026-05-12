@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>eKeberadaan Guru</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+    .loader { border-top-color: #3498db; animation: spinner 1.5s linear infinite; }
+    @keyframes spinner { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  </style>
+</head>
+<body class="min-h-screen pb-12">
+
+  <!-- Navigation -->
+  <nav class="bg-blue-700 text-white p-4 shadow-lg sticky top-0 z-50">
+    <div class="container mx-auto flex justify-between items-center">
+      <h1 class="font-bold text-lg flex items-center">
+        <i class="fas fa-user-check mr-2"></i> eKeberadaan
+      </h1>
+      <div id="navButtons">
+        <button onclick="showPage('user')" class="px-3 py-1 hover:bg-blue-600 rounded text-sm">Utama</button>
+        <button id="adminBtn" onclick="loginAdmin()" class="px-3 py-1 bg-blue-800 hover:bg-blue-900 rounded text-sm ml-2">Admin</button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <div class="container mx-auto p-4 max-w-md md:max-w-4xl">
+    
+    <!-- LOADING OVERLAY -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center hidden z-[100]">
+      <div class="bg-white p-5 rounded-lg flex flex-col items-center">
+        <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mb-4"></div>
+        <p class="text-gray-700 font-semibold">Memproses...</p>
+      </div>
+    </div>
+
+    <!-- PAGE: USER FORM -->
+    <div id="userPage" class="page">
+      <div class="bg-white p-6 rounded-xl shadow-md">
+        <h2 class="text-xl font-bold mb-6 text-gray-800 border-b pb-2">Borang Keberadaan</h2>
+        
+        <form id="presenceForm" onsubmit="handleFormSubmit(event)">
+          <!-- NAMA (Searchable) -->
+          <div class="mb-4 relative">
+            <label class="block text-sm font-semibold text-gray-700 mb-1">Nama Guru</label>
+            <input type="text" id="teacherSearch" placeholder="Taip nama anda..." 
+                   class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                   oninput="searchTeacher(this.value)" autocomplete="off">
+            <div id="searchDropdown" class="absolute w-full bg-white border rounded-b-lg shadow-xl max-h-48 overflow-y-auto hidden z-10"></div>
+            <input type="hidden" id="selectedNama" name="nama" required>
+          </div>
+
+          <!-- URUSAN -->
+          <div class="mb-4">
+            <label class="block text-sm font-semibold text-gray-700 mb-1">Urusan Keberadaan</label>
+            <select id="urusan" name="urusan" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
+                    onchange="toggleFields(this.value)" required>
+              <option value="">-- Pilih Urusan --</option>
+              <option value="KELUAR WAKTU BEKERJA / URUSAN DALAMAN">KELUAR WAKTU BEKERJA / URUSAN DALAMAN</option>
+              <option value="URUSAN RASMI">URUSAN RASMI</option>
+              <option value="CUTI">CUTI</option>
+            </select>
+          </div>
+
+          <!-- DYNAMIC FIELDS -->
+          <div id="dynamicFields" class="space-y-4"></div>
+
+          <button type="submit" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg mt-6 hover:bg-blue-700 transition duration-200">
+            SIMPAN MAKLUMAT
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- PAGE: ADMIN DASHBOARD -->
+    <div id="adminPage" class="page hidden">
+      <!-- Admin Submenu -->
+      <div class="flex space-x-2 mb-6 overflow-x-auto pb-2">
+        <button onclick="showAdminTab('dashboard')" class="admin-tab-btn px-4 py-2 bg-white rounded-lg shadow-sm font-semibold text-blue-600 border-b-2 border-blue-600">DASHBOARD</button>
+        <button onclick="showAdminTab('rekod')" class="admin-tab-btn px-4 py-2 bg-white rounded-lg shadow-sm font-semibold text-gray-600">REKOD</button>
+        <button onclick="showAdminTab('tetapan')" class="admin-tab-btn px-4 py-2 bg-white rounded-lg shadow-sm font-semibold text-gray-600">TETAPAN</button>
+        <button onclick="logoutAdmin()" class="px-4 py-2 bg-red-100 text-red-600 rounded-lg font-semibold ml-auto">Log Keluar</button>
+      </div>
+
+      <!-- Tab Content -->
+      <div id="adminContent"></div>
+    </div>
+
+  </div>
+
+  <script>
+    let allTeachers = [];
+    let currentAdminTab = 'dashboard';
+
+    // Mock functions for local preview/testing
+    const isGAS = typeof google !== 'undefined' && google.script && google.script.run;
+
+    const mockRun = {
+      withSuccessHandler: function(callback) {
+        this.callback = callback;
+        return this;
+      },
+      getTeachers: function() {
+        console.warn("Running in local mode: Mocking getTeachers");
+        const mockData = [
+          {id: 'G01', nama: 'Ahmad bin Ali', jawatan: 'Guru Penyelaras ICT'},
+          {id: 'G02', nama: 'Siti binti Abu', jawatan: 'Guru Akademik'},
+          {id: 'G03', nama: 'Tan Ah Kow', jawatan: 'Ketua Bidang'}
+        ];
+        setTimeout(() => this.callback(mockData), 500);
+      },
+      saveRecord: function(data) {
+        console.warn("Running in local mode: Mocking saveRecord", data);
+        setTimeout(() => this.callback({success: true}), 500);
+      },
+      getDashboardStats: function() {
+        console.warn("Running in local mode: Mocking getDashboardStats");
+        setTimeout(() => this.callback({total: 10, keluar: 2, rasmi: 3, cuti: 5}), 500);
+      },
+      getRecords: function(date, type) {
+        console.warn("Running in local mode: Mocking getRecords");
+        setTimeout(() => this.callback([]), 500);
+      },
+      addTeacher: function(n, j) {
+        console.warn("Running in local mode: Mocking addTeacher");
+        setTimeout(() => this.callback(true), 500);
+      },
+      deleteRecord: function(id) {
+        console.warn("Running in local mode: Mocking deleteRecord");
+        setTimeout(() => this.callback(true), 500);
+      }
+    };
+
+    const run = isGAS ? google.script.run : mockRun;
+
+    window.onload = () => {
+      fetchTeachers();
+      showPage('user');
+    };
+
+    function showPage(page) {
+      document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
+      document.getElementById(page + 'Page').classList.remove('hidden');
+      if (page === 'admin') showAdminTab('dashboard');
+    }
+
+    function fetchTeachers() {
+      run.withSuccessHandler(data => {
+        allTeachers = data;
+      }).getTeachers();
+    }
+
+    // SEARCH LOGIC
+    function searchTeacher(val) {
+      const dropdown = document.getElementById('searchDropdown');
+      if (val.length < 2) { dropdown.classList.add('hidden'); return; }
+      
+      const matches = allTeachers.filter(t => t.nama.toLowerCase().includes(val.toLowerCase()));
+      if (matches.length > 0) {
+        dropdown.innerHTML = matches.map(t => `
+          <div class="p-3 hover:bg-blue-50 cursor-pointer border-b text-sm" onclick="selectTeacher('${t.nama}')">
+            ${t.nama} <span class="text-xs text-gray-400">(${t.jawatan})</span>
+          </div>
+        `).join('');
+        dropdown.classList.remove('hidden');
+      } else {
+        dropdown.classList.add('hidden');
+      }
+    }
+
+    function selectTeacher(nama) {
+      document.getElementById('teacherSearch').value = nama;
+      document.getElementById('selectedNama').value = nama;
+      document.getElementById('searchDropdown').classList.add('hidden');
+    }
+
+    // DYNAMIC FORM LOGIC
+    function toggleFields(val) {
+      const container = document.getElementById('dynamicFields');
+      container.innerHTML = "";
+      const today = new Date().toISOString().split('T')[0];
+      const d = today.split("-");
+      const todayFormatted = `${d[2]}-${d[1]}-${d[0]}`;
+
+      if (val === "KELUAR WAKTU BEKERJA / URUSAN DALAMAN") {
+        container.innerHTML = `
+          <div><label class="block text-xs font-bold text-gray-500 uppercase">Urusan Keluar</label>
+          <input type="text" name="urusanKeluar" class="w-full p-2 border rounded-md" placeholder="Contoh: Klinik, Bank" required></div>
+          <div><label class="block text-xs font-bold text-gray-500 uppercase">Tarikh</label>
+          <input type="text" name="tarikhMula" class="w-full p-2 border rounded-md" placeholder="DD-MM-YYYY" value="${todayFormatted}" required></div>
+          <div class="grid grid-cols-2 gap-2">
+            <div><label class="block text-xs font-bold text-gray-500 uppercase">Masa Keluar</label>
+            <input type="time" name="masaKeluar" class="w-full p-2 border rounded-md" required></div>
+            <div><label class="block text-xs font-bold text-gray-500 uppercase">Masa Masuk</label>
+            <input type="time" name="masaMasuk" class="w-full p-2 border rounded-md" required></div>
+          </div>
+          <div><label class="block text-xs font-bold text-gray-500 uppercase">Catatan</label>
+          <textarea name="catatan" class="w-full p-2 border rounded-md"></textarea></div>
+        `;
+      } else if (val === "URUSAN RASMI") {
+        container.innerHTML = `
+          <div><label class="block text-xs font-bold text-gray-500 uppercase">Jenis Urusan</label>
+          <select name="jenisUrusan" class="w-full p-2 border rounded-md" required>
+            <option value="MESYUARAT">MESYUARAT</option>
+            <option value="BENGKEL">BENGKEL</option>
+            <option value="PROGRAM">PROGRAM</option>
+            <option value="KURSUS">KURSUS</option>
+            <option value="TAKLIMAT">TAKLIMAT</option>
+          </select></div>
+          <div><label class="block text-xs font-bold text-gray-500 uppercase">Nama Program</label>
+          <input type="text" name="namaProgram" class="w-full p-2 border rounded-md" required></div>
+          <div class="grid grid-cols-2 gap-2">
+            <div><label class="block text-xs font-bold text-gray-500 uppercase">Tarikh Mula</label>
+            <input type="text" name="tarikhMula" class="w-full p-2 border rounded-md" placeholder="DD-MM-YYYY" value="${todayFormatted}" required></div>
+            <div><label class="block text-xs font-bold text-gray-500 uppercase">Tarikh Tamat</label>
+            <input type="text" name="tarikhTamat" class="w-full p-2 border rounded-md" placeholder="DD-MM-YYYY" value="${todayFormatted}" required></div>
+          </div>
+          <div><label class="block text-xs font-bold text-gray-500 uppercase">Tempat</label>
+          <input type="text" name="tempat" class="w-full p-2 border rounded-md" required></div>
+          <div><label class="block text-xs font-bold text-gray-500 uppercase">Anjuran</label>
+          <input type="text" name="anjuran" class="w-full p-2 border rounded-md" required></div>
+          <div><label class="block text-xs font-bold text-gray-500 uppercase">Catatan</label>
+          <textarea name="catatan" class="w-full p-2 border rounded-md"></textarea></div>
+        `;
+      } else if (val === "CUTI") {
+        container.innerHTML = `
+          <div><label class="block text-xs font-bold text-gray-500 uppercase">Jenis Cuti</label>
+          <select name="jenisCuti" class="w-full p-2 border rounded-md" required>
+            <option value="CUTI SAKIT">CUTI SAKIT</option>
+            <option value="CUTI BERSALIN">CUTI BERSALIN</option>
+            <option value="CUTI KUARANTIN">CUTI KUARANTIN</option>
+            <option value="CTR">CTR</option>
+            <option value="CRK">CRK</option>
+            <option value="CUTI SEPARUH / TANPA GAJI">CUTI SEPARUH / TANPA GAJI</option>
+            <option value="CUTI REHAT">CUTI REHAT</option>
+          </select></div>
+          <div class="grid grid-cols-2 gap-2">
+            <div><label class="block text-xs font-bold text-gray-500 uppercase">Tarikh Mula</label>
+            <input type="text" name="tarikhMula" class="w-full p-2 border rounded-md" placeholder="DD-MM-YYYY" value="${todayFormatted}" required></div>
+            <div><label class="block text-xs font-bold text-gray-500 uppercase">Tarikh Tamat</label>
+            <input type="text" name="tarikhTamat" class="w-full p-2 border rounded-md" placeholder="DD-MM-YYYY" value="${todayFormatted}" required></div>
+          </div>
+          <div><label class="block text-xs font-bold text-gray-500 uppercase">Catatan</label>
+          <textarea name="catatan" class="w-full p-2 border rounded-md"></textarea></div>
+        `;
+      }
+    }
+
+    // FORM SUBMISSION
+    function handleFormSubmit(e) {
+      e.preventDefault();
+      const formData = {};
+      const inputs = e.target.querySelectorAll('input, select, textarea');
+      inputs.forEach(input => {
+        if (input.name) formData[input.name] = input.value;
+      });
+
+      if (!formData.nama) { alert("Sila pilih nama guru dari carian!"); return; }
+
+      toggleLoading(true);
+      run.withSuccessHandler(res => {
+        toggleLoading(false);
+        alert("Rekod berjaya disimpan!");
+        e.target.reset();
+        document.getElementById('dynamicFields').innerHTML = "";
+        document.getElementById('selectedNama').value = "";
+      }).saveRecord(formData);
+    }
+
+    // ADMIN LOGIC
+    function loginAdmin() {
+      const pass = prompt("Masukkan Kata Laluan Admin:");
+      if (pass === "Admin0123") {
+        showPage('admin');
+      } else if (pass !== null) {
+        alert("Kata laluan salah!");
+      }
+    }
+
+    function logoutAdmin() {
+      showPage('user');
+    }
+
+    function toggleLoading(show) {
+      document.getElementById('loadingOverlay').classList.toggle('hidden', !show);
+    }
+
+    function showAdminTab(tab) {
+      currentAdminTab = tab;
+      const content = document.getElementById('adminContent');
+      content.innerHTML = `<div class="flex justify-center p-10"><div class="loader rounded-full border-4 border-t-4 h-8 w-8"></div></div>`;
+      
+      document.querySelectorAll('.admin-tab-btn').forEach(btn => {
+        if (btn.innerText.toLowerCase() === tab) {
+          btn.classList.add('text-blue-600', 'border-b-2', 'border-blue-600');
+          btn.classList.remove('text-gray-600');
+        } else {
+          btn.classList.remove('text-blue-600', 'border-b-2', 'border-blue-600');
+          btn.classList.add('text-gray-600');
+        }
+      });
+
+      if (tab === 'dashboard') {
+        run.withSuccessHandler(stats => {
+          content.innerHTML = `
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="bg-blue-50 p-6 rounded-xl border border-blue-100">
+                <p class="text-blue-600 font-bold text-sm uppercase">Jumlah Hari Ini</p>
+                <h3 class="text-4xl font-bold text-blue-800">${stats.total}</h3>
+              </div>
+              <div class="bg-white p-4 rounded-xl shadow-sm border space-y-3">
+                <div class="flex justify-between"><span>Keluar / Dalaman:</span> <span class="font-bold">${stats.keluar}</span></div>
+                <div class="flex justify-between"><span>Urusan Rasmi:</span> <span class="font-bold">${stats.rasmi}</span></div>
+                <div class="flex justify-between"><span>Cuti:</span> <span class="font-bold">${stats.cuti}</span></div>
+              </div>
+            </div>
+          `;
+        }).getDashboardStats();
+      } else if (tab === 'rekod') {
+        loadRecords();
+      } else if (tab === 'tetapan') {
+        content.innerHTML = `
+          <div class="bg-white p-6 rounded-xl shadow-sm border">
+            <h3 class="font-bold mb-4">Tambah Guru Baru</h3>
+            <div class="space-y-4">
+              <input type="text" id="newTeacherName" placeholder="Nama Penuh" class="w-full p-2 border rounded">
+              <input type="text" id="newTeacherPos" placeholder="Jawatan" class="w-full p-2 border rounded">
+              <button onclick="saveNewTeacher()" class="w-full bg-green-600 text-white py-2 rounded font-bold">TAMBAH GURU</button>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    function loadRecords() {
+      const today = new Date().toISOString().split('T')[0];
+      const d = today.split("-");
+      const todayFormatted = `${d[2]}-${d[1]}-${d[0]}`;
+
+      run.withSuccessHandler(records => {
+        const content = document.getElementById('adminContent');
+        content.innerHTML = `
+          <div class="bg-white p-4 rounded-xl shadow-sm border mb-4">
+            <div class="flex flex-wrap gap-2 mb-4">
+              <input type="text" id="filterDate" placeholder="DD-MM-YYYY" value="${todayFormatted}" class="p-2 border rounded text-sm w-32">
+              <select id="filterType" class="p-2 border rounded text-sm">
+                <option value="SEMUA">SEMUA JENIS</option>
+                <option value="KELUAR WAKTU BEKERJA / URUSAN DALAMAN">KELUAR</option>
+                <option value="URUSAN RASMI">RASMI</option>
+                <option value="CUTI">CUTI</option>
+              </select>
+              <button onclick="applyFilter()" class="bg-blue-600 text-white px-4 py-2 rounded text-sm">Filter</button>
+              <button onclick="window.print()" class="bg-gray-100 px-4 py-2 rounded text-sm"><i class="fas fa-print"></i></button>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-xs text-left border-collapse">
+                <thead>
+                  <tr class="bg-gray-50 border-b">
+                    <th class="p-2">NAMA</th>
+                    <th class="p-2">URUSAN</th>
+                    <th class="p-2">TARIKH</th>
+                    <th class="p-2">INFO</th>
+                    <th class="p-2">TINDAKAN</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${records.length > 0 ? records.map(r => `
+                    <tr class="border-b hover:bg-gray-50">
+                      <td class="p-2 font-semibold">${r.Nama}</td>
+                      <td class="p-2"><span class="px-2 py-0.5 rounded-full text-[10px] ${r.UrusanKeberadaan === 'CUTI' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}">${r.UrusanKeberadaan}</span></td>
+                      <td class="p-2">${r.TarikhMula} ${r.TarikhTamat !== r.TarikhMula ? '<br>hingga<br>' + r.TarikhTamat : ''}</td>
+                      <td class="p-2 text-gray-500">${r.UrusanKeluar || r.JenisUrusan || r.JenisCuti}<br>${r.NamaProgram || ''}</td>
+                      <td class="p-2"><button onclick="deleteRec('${r.IDRekod}')" class="text-red-500"><i class="fas fa-trash"></i></button></td>
+                    </tr>
+                  `).join('') : '<tr><td colspan="5" class="p-4 text-center text-gray-400">Tiada rekod dijumpai</td></tr>'}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      }).getRecords(todayFormatted, "SEMUA");
+    }
+
+    function applyFilter() {
+      const date = document.getElementById('filterDate').value;
+      const type = document.getElementById('filterType').value;
+      toggleLoading(true);
+      run.withSuccessHandler(records => {
+        toggleLoading(false);
+        loadRecordsWithData(records);
+      }).getRecords(date, type);
+    }
+
+    function loadRecordsWithData(records) {
+      const tbody = document.querySelector('tbody');
+      if (!tbody) return;
+      tbody.innerHTML = records.length > 0 ? records.map(r => `
+        <tr class="border-b hover:bg-gray-50">
+          <td class="p-2 font-semibold">${r.Nama}</td>
+          <td class="p-2"><span class="px-2 py-0.5 rounded-full text-[10px] ${r.UrusanKeberadaan === 'CUTI' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}">${r.UrusanKeberadaan}</span></td>
+          <td class="p-2">${r.TarikhMula} ${r.TarikhTamat !== r.TarikhMula ? '<br>hingga<br>' + r.TarikhTamat : ''}</td>
+          <td class="p-2 text-gray-500">${r.UrusanKeluar || r.JenisUrusan || r.JenisCuti}<br>${r.NamaProgram || ''}</td>
+          <td class="p-2"><button onclick="deleteRec('${r.IDRekod}')" class="text-red-500"><i class="fas fa-trash"></i></button></td>
+        </tr>
+      `).join('') : '<tr><td colspan="5" class="p-4 text-center text-gray-400">Tiada rekod dijumpai</td></tr>';
+    }
+
+    function deleteRec(id) {
+      if (confirm("Adakah anda pasti mahu memadam rekod ini?")) {
+        toggleLoading(true);
+        run.withSuccessHandler(() => {
+          toggleLoading(false);
+          showAdminTab('rekod');
+        }).deleteRecord(id);
+      }
+    }
+
+    function saveNewTeacher() {
+      const nama = document.getElementById('newTeacherName').value;
+      const jawatan = document.getElementById('newTeacherPos').value;
+      if (!nama || !jawatan) return alert("Sila isi semua maklumat!");
+      
+      toggleLoading(true);
+      run.withSuccessHandler(() => {
+        toggleLoading(false);
+        alert("Guru berjaya ditambah!");
+        fetchTeachers();
+        showAdminTab('tetapan');
+      }).addTeacher(nama, jawatan);
+    }
+  </script>
+</body>
+</html>
